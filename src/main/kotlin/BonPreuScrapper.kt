@@ -1,5 +1,4 @@
 import org.openqa.selenium.By
-import org.openqa.selenium.Keys
 import org.openqa.selenium.StaleElementReferenceException
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.chrome.ChromeDriver
@@ -12,7 +11,7 @@ import java.time.Duration
 
 class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : ScrapperInterface {
     private var driver: ChromeDriver = createDriver()
-    override var result: List<Result>? = null
+    override var result: List<Result>? = arrayListOf()
 
     private fun createDriver(): ChromeDriver {
         val options = ChromeOptions();
@@ -39,31 +38,51 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
 
 
     private fun extractCategoryAndProductsInfo(driver: ChromeDriver): List<Result> {
+
+        Thread.sleep(300)
+
         val subCategoriesWeb = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[1]/div[2]/div[2]/ul/li/a"))
-        val results: ArrayList<List<Result>> = arrayListOf()
-        subCategoriesWeb.forEach { parentCategory ->
-            safeClick(parentCategory)
-            safeClick(parentCategory)
-            val url = URL(driver.currentUrl)
-            val idString = url.toString().split("=").last()
-            val category = Category(id = idString, name = parentCategory.text, 2)
-//            safeClick(parentCategory)
-            println("Scrapping category named ${category.name} ...")
-            val products = extractProductsInfo(driver, category)
-            println("${category.name} successfully scrapped")
-//            val subCategories = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[1]/div[2]/div[2]/ul/li"))
-//            results.add(
-//                return Result(category, products)
-//            )
-            driver.navigate().back()
+        val categoriesSize = subCategoriesWeb.size
+
+        val results: ArrayList<Result> = arrayListOf()
+
+        for(i in 1 until categoriesSize+1) {
+            Thread.sleep(450)
+            val categoryWebElement =
+                findElementSafelyDriver("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[1]/div[2]/div[2]/ul/li[$i]/a")
+
+            categoryWebElement?.let {
+                val name = categoryWebElement.text
+                safeClick(categoryWebElement)
+
+                val url = URL(driver.currentUrl)
+                val idString = url.toString().split("=").last()
+                val category = Category(id = idString, name = name, 2)
+                println("Scrapping category named ${category.name} ...")
+                val products = extractProductsInfo(driver, category)
+                println("${category.name} successfully scrapped")
+
+                val categoryProduct = Result(category, products)
+                onScrappedResult(categoryProduct)
+                results.add(categoryProduct)
+
+                driver.navigate().back()
+            }
         }
-        return emptyList()
+        return results
     }
 
     private fun safeClick(element: WebElement) {
-        val wait = WebDriverWait(driver, Duration.ofMillis(6000))
-        wait.until(ExpectedConditions.elementToBeClickable(element))
-        element.click()
+        try {
+            val wait = WebDriverWait(driver, Duration.ofMillis(6000))
+            wait.until(ExpectedConditions.elementToBeClickable(element))
+            element.click()
+        } catch (error: Exception) {
+            System.err.println("Could not click ...retrying")
+//            if (error is StaleElementReferenceException) {
+//                safeClick(element)
+//            }
+        }
     }
 
 
@@ -72,6 +91,7 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
 
         driver.get(urlBonPreu)
         driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(15));
+        driver.manage().window().maximize()
         // Cookies
         val cookies = driver.findElement(By.id("onetrust-accept-btn-handler"))
         safeClick(cookies)
@@ -96,35 +116,39 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
 
         return parentCategories.map {
             safeClick(it)
-            return@map extractCategoryAndProductsInfo(driver)
+            extractCategoryAndProductsInfo(driver)
         }.flatten()
     }
 
+    private fun safeScroll(productElement: WebElement) {
+        try {
+            Actions(driver)
+                .scrollToElement(productElement)
+                .perform()
+        } catch (e: Exception) {
+            System.err.println("Could not scroll to element with name $productElement :/")
+        }
+    }
+
     private fun extractProductsInfo(driver: ChromeDriver, category: Category): List<Product> {
+        Thread.sleep(200)
         val productsElements = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[2]/div/div/div")).drop(1)
         val productes = ArrayList<Product>()
-        var i = 0
-        for (productElement in productsElements) {
-            if (i%25 == 0) {
-                Actions(driver)
-                    .scrollToElement(productElement)
-                    .perform()
+        for ((i, productElement) in productsElements.withIndex()) {
+            if (i%6 == 0 && i != 0) {
+                safeScroll(productElement)
+                Thread.sleep(100)
             }
-//            val elements = section.findElements(By.xpath("./div/div"))
-            //*[@id="main"]/div[2]/div/div/div[2]/div/div/div[2]/div[2]/div[2]/div[1]/div[2]/div/span[2]
-//*[@id="main"]/div[2]/div/div/div[2]/div/div/div[2]/div[2]/div[2]/div[1]/div[3]/strong
-//            val products: List<Product> = elements.map {//*[@id="main"]/div[2]/div/div/div[2]/div/div/div[2]/div[2]/div[2]/div[1]/div[2]/div/span[1]
-                val image = findElementSafely("./div[2]/div[1]/div/a/img", productElement)?.getAttribute("src")
-                val name = findElementSafely("./div[2]/div[2]/div[1]/h3/a", productElement)?.text ?: ""
-                val price = findElementSafely("./div[2]/div[2]/div[1]/div[3]/strong", productElement)?.text ?: ""
-                val extraPrice = findElementSafely("./div[2]/div[2]/div[1]/div[2]/div/span[2]", productElement)?.text
-                val size = findElementSafely("./div[2]/div[2]/div[1]/div[2]/div/span[1]", productElement)?.text/*+ " " +
-                    findElementSafely("./button/div[2]/div[1]/span[2]", it)?.text*/
-//            extractProductId(driver, it)
-                val product = Product(name, image, price, extraPrice, size, category.id)
-//            }
+            print("Inspecting element number $i .... \n")
+            val name = findElementSafely("./div[2]/div[2]/div[1]/h3/a", productElement)?.text ?: break
+
+            val image = findElementSafely("./div[2]/div[1]/div/a/img", productElement)?.getAttribute("src")
+
+            val price = findElementSafely("./div[2]/div[2]/div[1]/div[3]/strong", productElement)?.text ?: ""
+//            val extraPrice = findElementSafely("./div[2]/div[2]/div[1]/div[2]/div/span[2]", productElement)?.text
+            val size = findElementSafely("./div[2]/div[2]/div[1]/div[2]/div", productElement)?.text
+            val product = Product(name, image, price, "", size, category.id, 2)
             productes.add(product)
-            i++
         }
 
         return productes
@@ -133,25 +157,20 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
     private fun findElementSafely(xpath: String, element: WebElement): WebElement? {
         return try {
             element.findElement(By.xpath(xpath))
-        } catch (e: NoSuchElementException) {
+        } catch (e: Exception) {
+            System.err.println("could not locate element with xpath: $xpath")
             null
         }
     }
     private fun scrap() {
         result = parseCategoriesAndProducts(driver)
     }
-
-
-//fun extractProductId(driver: ChromeDriver, element: WebElement): Int {
-//    val buttonElement = element.findElement(By.cssSelector("button.product-cell__content-link"))
-//    val previousURL = driver.currentUrl
-
-//    safeClick(driver, buttonElement)
-//    val productURL = driver.currentUrl
-//    val idString = productURL.split("/").dropLast(1).last()
-//    safeClick(driver, driver.findElement(By.className("modal-content__close")))
-////    driver.get(previousURL)
-//    return Integer.parseInt(idString)
-//}
-
+    private fun findElementSafelyDriver(xpath: String): WebElement? {
+        return try {
+            driver.findElement(By.xpath(xpath))
+        } catch (e: Exception) {
+            System.err.println("could not locate element with xpath: $xpath")
+            null
+        }
+    }
 }

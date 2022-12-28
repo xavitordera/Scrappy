@@ -24,7 +24,7 @@ class DatabaseManager {
 
     private fun insertCategories(categories: List<Category>) {
         val values: String = categories.joinToString(",") {
-            "(" + "${it.id},\n" +
+            "(" + "'${it.id}',\n" +
                     "'${it.name}',\n" +
                     "${it.supermarket}\n" +
                     ")"
@@ -49,13 +49,13 @@ class DatabaseManager {
     private fun insertProducts(products: List<Product>) {
         val values: String = products.joinToString(",") {
             "(" +
-                    "'${it.name}'," +
-                    "'${it.image}'," +
-                    "'${it.price}'," +
-                    "'${it.extraPrice}'," +
+                    "\"${it.name}\"," +
+                    "\"${it.image}\"," +
+                    "\"${it.price}\"," +
+                    "\"${it.extraPrice}\"," +
                     "${it.supermarket}," +
-                    "${it.categoryId}," +
-                    "'${it.size}'" +
+                    "\"${it.categoryId}\"," +
+                    "\"${it.size}\"" +
                     ")"
         } + ";"
 
@@ -68,7 +68,8 @@ class DatabaseManager {
                         "`supermarket`," +
                         "`category`," +
                         "`size`)" +
-                        "VALUES" +
+                        " " +
+                        "VALUES " +
                         values
                 )
         println("Inserting products ...")
@@ -77,6 +78,7 @@ class DatabaseManager {
             statement?.executeUpdate()
             println("products inserted successfully ...")
         } catch (ex: SQLException) {
+            System.err.println(productsStatement)
             System.err.println(ex.message)
         }
     }
