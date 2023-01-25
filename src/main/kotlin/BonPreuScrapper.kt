@@ -78,10 +78,7 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
             wait.until(ExpectedConditions.elementToBeClickable(element))
             element.click()
         } catch (error: Exception) {
-            System.err.println("Could not click ...retrying")
-//            if (error is StaleElementReferenceException) {
-//                safeClick(element)
-//            }
+            System.err.println("Could not click ...")
         }
     }
 
@@ -113,11 +110,14 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
 
     private fun parseCategoriesAndProducts(driver: ChromeDriver): List<Result> {
         val parentCategories = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[1]/div[2]/div[2]/ul/li/a"))
-
-        return parentCategories.map {
-            safeClick(it)
-            extractCategoryAndProductsInfo(driver)
-        }.flatten()
+        val results: ArrayList<List<Result>> = arrayListOf()
+        for (i in 1..parentCategories.size+1) {
+            Thread.sleep(300)
+            val parentCategory = driver.findElement(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[1]/div[2]/div[2]/ul/li[$i]/a"))
+            safeClick(parentCategory)
+            results.add(extractCategoryAndProductsInfo(driver))
+        }
+        return results.flatten()
     }
 
     private fun safeScroll(productElement: WebElement) {
@@ -131,16 +131,17 @@ class BonPreuScrapper(override val onScrappedResult: (Result) -> Unit) : Scrappe
     }
 
     private fun extractProductsInfo(driver: ChromeDriver, category: Category): List<Product> {
-        Thread.sleep(200)
-        val productsElements = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[2]/div/div/div")).drop(1)
+        Thread.sleep(400)
+        val productsElements = driver.findElements(By.xpath("/html/body/div[1]/div/div[1]/div[2]/main/div[2]/div/div/div[2]/div/div/div")).drop(1).dropLast(6)
         val productes = ArrayList<Product>()
+        val size = productsElements.size
         for ((i, productElement) in productsElements.withIndex()) {
             if (i%6 == 0 && i != 0) {
                 safeScroll(productElement)
                 Thread.sleep(100)
             }
-            print("Inspecting element number $i .... \n")
-            val name = findElementSafely("./div[2]/div[2]/div[1]/h3/a", productElement)?.text ?: break
+            print("Inspecting element number $i out of $size.... \n")
+            val name = findElementSafely("./div[2]/div[2]/div[1]/h3/a", productElement)?.text ?: continue
 
             val image = findElementSafely("./div[2]/div[1]/div/a/img", productElement)?.getAttribute("src")
 
