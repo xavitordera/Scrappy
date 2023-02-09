@@ -49,4 +49,21 @@ class Database:
 
 
 if __name__ == "__main__":
-    pass
+    # usage example:
+
+    # load env variables
+    from dotenv import load_dotenv
+    load_dotenv()
+    import os
+    db_name = os.getenv("DB_NAME")
+    db_user = os.getenv("DB_USER")
+    db_password = os.getenv("DB_PASSWORD")
+    db_host = os.getenv("DB_HOST")
+    db_port = os.getenv("DB_PORT")
+
+    # open Database as context manager
+    with Database(dbname=db_name, user=db_user, password=db_password, host=db_host, port=db_port) as db:
+
+        selected = db.select('test')
+        print(selected)
+
